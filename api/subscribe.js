@@ -38,13 +38,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({ email }),
         });
 
-        // Check if webhook returned an error
-        if (!response.ok) {
-            console.error(`Webhook returned ${response.status}: ${response.statusText}`);
-            return res.status(500).json({ ok: false, status: 'error' });
-        }
-
-        // Forward the response from the webhook
+        // Parse the response from the webhook
         let data = null;
         try {
             data = await response.json();
@@ -52,13 +46,20 @@ export default async function handler(req, res) {
             data = null;
         }
 
-        // If n8n didn't return valid JSON, treat as error
-        if (!data || typeof data !== 'object') {
-            console.error('Webhook returned invalid or empty response');
+        // If n8n returned valid JSON, forward it (even for 409, 400, etc.)
+        if (data && typeof data === 'object') {
+            return res.status(200).json(data);
+        }
+
+        // If we couldn't parse JSON and response was an error, treat as error
+        if (!response.ok) {
+            console.error(`Webhook returned ${response.status}: ${response.statusText}`);
             return res.status(500).json({ ok: false, status: 'error' });
         }
 
-        return res.status(200).json(data);
+        // If n8n didn't return valid JSON but was 2xx, treat as error
+        console.error('Webhook returned invalid or empty response');
+        return res.status(500).json({ ok: false, status: 'error' });
 
     } catch (error) {
         console.error('Webhook request failed:', error);
